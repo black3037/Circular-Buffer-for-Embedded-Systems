@@ -1,10 +1,10 @@
-#include <stm32f4xx.h>
 #include "circularBuffer.h"
 
 void InitBuffer(commBuffer_t* comm)
 {
 	comm->tail = 0;
 	comm->head = 0;
+	comm->size = 0;
 }
 
 uint32_t bufferSize(commBuffer_t* comm)
@@ -24,20 +24,18 @@ void checkBufferOverflowStatus(commBuffer_t* comm)
 	}
 }
 
+
 uint8_t haveStr(commBuffer_t* comm)
 {
-	uint32_t buffer_status = 0;
-	uint32_t buffer_length = bufferSize(comm);
-
-	for (uint32_t i = comm->tail; i < buffer_length; i++)
+	uint8_t buffer_status = 0;
+	
+	for (int i = comm->tail; i < ((comm->tail + comm->size)); i++)
 	{
-		if (comm->buffer[i] == '\n')
+		int inc = i%MAXCOMMBUFFER;
+		
+		if (comm->buffer[inc] == '\n')
 		{
 			buffer_status = 1;
-		}
-		else
-		{
-			buffer_status = 0;
 		}
 	}
 	return buffer_status;
@@ -45,30 +43,57 @@ uint8_t haveStr(commBuffer_t* comm)
 
 void putChar(commBuffer_t* comm, char ch)
 {
-	checkBufferOverflowStatus(comm);
-	comm->head = (comm->head) + 1;
-	comm->buffer[comm->head - 1] = ch;
+		if (comm->size < MAXCOMMBUFFER - 1)
+		{	
+			comm->buffer[comm->head] = ch;
+			comm->size++;
+			comm->head = (comm->head + 1)%MAXCOMMBUFFER;
+		}
+		else if (comm->size == MAXCOMMBUFFER - 1)
+		{
+			comm->buffer[comm->head]='\n';
+			comm->size++;
+			comm->head = (comm->head + 1)%MAXCOMMBUFFER;
+		}
 }
 
 char getChar(commBuffer_t* comm)
 {
-	checkBufferOverflowStatus(comm);
-	comm->tail = (comm->tail) + 1;
-	
-	return comm->buffer[comm->tail];
+	char out=comm->buffer[comm->tail];
+	comm->size--;
+	comm->tail = (comm->tail + 1)%MAXCOMMBUFFER;
+	return out;
 }
 
-void putStr(commBuffer_t* comm, char* str, uint8_t length)
+void putStr(commBuffer_t* comm, char* str)
 {
-	for (uint32_t i = 0; i <= length; i++)
+	uint8_t length = strlen(str);
+	for (uint32_t i = 0; i < length; i++)
 	{
 		putChar(comm, str[i]);
 	}
+	putChar(comm,'\n');
 }
 
 void getStr(commBuffer_t* comm, char* str)
 {
-	uint32_t buffer_length = bufferSize(comm);
-	memcpy(str, &(comm->buffer[comm->tail]), buffer_length - 1);
-	comm->tail = comm->head;
+	char val = comm->tail;
+	uint32_t i = 0;
+	while(comm->size != 0)
+	{
+			char c = getChar(comm);
+			if (c != '\n')
+			{
+				str[i]= c;
+			
+			}
+			else
+			{
+				str[i] = c;
+				str[i+1] = 0x0;
+				break;
+			}
+			val = (val + 1)%MAXCOMMBUFFER;
+			i++;
+	}
 }
